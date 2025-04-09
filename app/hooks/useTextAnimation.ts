@@ -21,7 +21,7 @@ export const phrases = [
 // Hook personalizado para la animación de texto
 export function useTextAnimation() {
   const [text, setText] = useState("");
-  const [isActive, setIsActive] = useState(document.visibilityState === "visible");
+  const [isActive, setIsActive] = useState(true); // Inicializar con true por defecto
   const animationRef = useRef<AnimationRef>({
     timeoutId: null,
     animationFrameId: null,
@@ -31,6 +31,12 @@ export function useTextAnimation() {
     lastTimestamp: 0,
     isAnimating: false
   });
+
+  // Inicializar isActive basado en document.visibilityState cuando el componente se monta
+  useEffect(() => {
+    // Solo ejecutar en el cliente
+    setIsActive(document.visibilityState === "visible");
+  }, []);
 
   // Función optimizada para escribir texto usando requestAnimationFrame
   const writer = (textToWrite: string) => {
