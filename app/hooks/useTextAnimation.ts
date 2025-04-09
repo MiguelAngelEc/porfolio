@@ -1,45 +1,52 @@
-"use client";
+import { useState, useEffect, useRef } from "react";
 
-import React, { useState, useEffect, useRef } from "react";
+// Tipos
+export interface AnimationRef {
+  timeoutId: number | null;
+  animationFrameId: number | null;
+  currentIndex: number;
+  currentCharIndex: number;
+  targetText: string;
+  lastTimestamp: number;
+  isAnimating: boolean;
+}
 
-export default function Main() {
+// Datos
+export const phrases = [
+  "developer from Ecuador.",
+  "I love to code, learn, and share what I build,",
+  "Let's create something great together."
+];
+
+// Hook personalizado para la animación de texto
+export function useTextAnimation() {
   const [text, setText] = useState("");
-  const [isActive, setIsActive] = useState(true);
-  const animationRef = useRef<{
-    timeoutId: number | null;
-    animationFrameId: number | null;
-    currentIndex: number;
-    currentCharIndex: number;
-    targetText: string;
-    lastTimestamp: number;
-  }>({
+  const [isActive, setIsActive] = useState(document.visibilityState === "visible");
+  const animationRef = useRef<AnimationRef>({
     timeoutId: null,
     animationFrameId: null,
     currentIndex: 0,
     currentCharIndex: 0,
     targetText: "",
     lastTimestamp: 0,
+    isAnimating: false
   });
 
-  const phrases = [
-    "developer from Ecuador.",
-    "I love to code, learn, and share what I build,",
-    "Let's create something great together."
-  ];
-  
-  // Optimized text writing function using requestAnimationFrame
+  // Función optimizada para escribir texto usando requestAnimationFrame
   const writer = (textToWrite: string) => {
-    // Clear any previous animation
+    // Limpiar cualquier animación previa
     if (animationRef.current.animationFrameId) {
       cancelAnimationFrame(animationRef.current.animationFrameId);
+      animationRef.current.animationFrameId = null;
     }
     
-    // Update animation state
+    // Actualizar el estado de la animación
     animationRef.current.targetText = textToWrite;
     animationRef.current.currentCharIndex = 0;
     animationRef.current.lastTimestamp = 0;
+    animationRef.current.isAnimating = true;
     
-    // Only start animation if page is active
+    // Solo iniciar la animación si la página está activa
     if (isActive) {
       const animate = (timestamp: number) => {
         if (!animationRef.current.lastTimestamp) {
@@ -48,7 +55,7 @@ export default function Main() {
         
         const elapsed = timestamp - animationRef.current.lastTimestamp;
         
-        // Update every 80ms
+        // Actualizar cada 80ms
         if (elapsed > 80) {
           animationRef.current.lastTimestamp = timestamp;
           animationRef.current.currentCharIndex++;
@@ -59,6 +66,7 @@ export default function Main() {
             animationRef.current.animationFrameId = requestAnimationFrame(animate);
           } else {
             animationRef.current.animationFrameId = null;
+            animationRef.current.isAnimating = false;
           }
         } else {
           animationRef.current.animationFrameId = requestAnimationFrame(animate);
@@ -68,29 +76,30 @@ export default function Main() {
       animationRef.current.animationFrameId = requestAnimationFrame(animate);
     }
     
-    // Return approximate duration
+    // Devolver duración aproximada
     return (textToWrite.length * 80) + 500;
   };
   
   const startTextAnimation = (currentIndex = 0) => {
-    // Save current index
+    // Guardar índice actual
     animationRef.current.currentIndex = currentIndex;
     
-    // Only proceed if page is active
+    // Solo proceder si la página está activa
     if (!isActive) return null;
     
-    // Write current phrase
+    // Escribir frase actual
     const duration = writer(phrases[currentIndex]);
     
-    // Calculate next index
+    // Calcular siguiente índice
     const nextIndex = (currentIndex + 1) % phrases.length;
     
-    // Clear any previous timeout
+    // Limpiar cualquier timeout anterior
     if (animationRef.current.timeoutId) {
       window.clearTimeout(animationRef.current.timeoutId);
+      animationRef.current.timeoutId = null;
     }
     
-    // Schedule next phrase
+    // Programar siguiente frase
     const timeoutId = window.setTimeout(() => {
       startTextAnimation(nextIndex);
     }, duration + 1000);
@@ -98,60 +107,80 @@ export default function Main() {
     animationRef.current.timeoutId = timeoutId;
     return timeoutId;
   };
-  
-  // Handle visibility changes
+
+  // Manejar cambios de visibilidad
   useEffect(() => {
     const handleVisibilityChange = () => {
       const isDocumentVisible = document.visibilityState === "visible";
       setIsActive(isDocumentVisible);
-      
-      // If page becomes visible again, resume from where we left off
-      if (isDocumentVisible) {
-        // Clear any pending animations
+    };
+    
+    // Registrar evento de cambio de visibilidad
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    
+    // Limpieza al desmontar
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+  
+  // Efecto para manejar la animación basado en el estado de visibilidad
+  useEffect(() => {
+    if (isActive) {
+      // Si la página está activa y no hay animación en curso, iniciar o reanudar
+      if (!animationRef.current.isAnimating) {
+        // Limpiar cualquier animación pendiente
         if (animationRef.current.timeoutId) {
           window.clearTimeout(animationRef.current.timeoutId);
+          animationRef.current.timeoutId = null;
         }
         if (animationRef.current.animationFrameId) {
           cancelAnimationFrame(animationRef.current.animationFrameId);
+          animationRef.current.animationFrameId = null;
         }
         
-        // Resume animation from last known index
+        // Reanudar la animación desde el último índice conocido
         startTextAnimation(animationRef.current.currentIndex);
       }
-    };
-    
-    // Register visibility change event
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    
-    // Cleanup on unmount
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      
+    } else {
+      // Si la página no está activa, detener todas las animaciones
       if (animationRef.current.timeoutId) {
         window.clearTimeout(animationRef.current.timeoutId);
+        animationRef.current.timeoutId = null;
       }
       if (animationRef.current.animationFrameId) {
         cancelAnimationFrame(animationRef.current.animationFrameId);
+        animationRef.current.animationFrameId = null;
+      }
+      animationRef.current.isAnimating = false;
+    }
+    
+    // Limpieza al desmontar o cuando cambia isActive
+    return () => {
+      if (animationRef.current.timeoutId) {
+        window.clearTimeout(animationRef.current.timeoutId);
+        animationRef.current.timeoutId = null;
+      }
+      if (animationRef.current.animationFrameId) {
+        cancelAnimationFrame(animationRef.current.animationFrameId);
+        animationRef.current.animationFrameId = null;
       }
     };
   }, [isActive]);
   
-  // Defer animation initialization until after initial render
+  // Diferir la inicialización de la animación hasta después del renderizado inicial
   useEffect(() => {
-    // Use requestIdleCallback or setTimeout to defer non-critical initialization
+    // Usar setTimeout para diferir la inicialización no crítica
     const initAnimationId = window.setTimeout(() => {
-      startTextAnimation(0);
+      if (isActive) {
+        startTextAnimation(0);
+      }
     }, 0);
     
     return () => {
       window.clearTimeout(initAnimationId);
     };
   }, []);
-  
-  return (
-    <div className="flex flex-col items-left">
-      <h1 className="text-6xl font-bold mb-4">Hi, I'm Miguel Angel</h1>
-      <p className="text-2xl min-h-[2rem] text-[#00a3c0] text-left">{text}</p>
-    </div>
-  );
+
+  return { text };
 }
